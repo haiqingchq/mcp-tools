@@ -12,6 +12,13 @@ def add(a: int, b: int) -> int:
     return a + b
 
 
+@mcp.tool()
+def fetch(url: str) -> str:
+    """Fetch the content of a URL"""
+    import requests
+    return requests.get(url).text
+
+
 # Add a dynamic greeting resource
 @mcp.resource("greeting://{name}")
 def get_greeting(name: str) -> str:

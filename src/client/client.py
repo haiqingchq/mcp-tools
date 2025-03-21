@@ -55,17 +55,22 @@ class MCPClient:
         """Process a query using Claude and available tools"""
         messages = [
             {
-                "role": "user",
-                "content": query
+                "parts": [{"text": query}],
+                "role": "user"
             }
         ]
 
         response = await self.session.list_tools()
-        available_tools = [{
-            "name": tool.name,
-            "description": tool.description,
-            "input_schema": tool.inputSchema
-        } for tool in response.tools]
+        available_tools = [
+            {
+                "function_declarations": [{
+                    "name": tool.name,
+                    "description": tool.description,
+                    "parameters": tool.inputSchema
+                }]
+            }
+            for tool in response.tools
+        ]
 
         # Initial Claude API call
         # response = self.anthropic.messages.create(
@@ -87,44 +92,21 @@ class MCPClient:
         final_text = []
 
         assistant_message_content = []
-        for content in response.content:
-            if content.type == 'text':
-                final_text.append(content.text)
-                assistant_message_content.append(content)
-            elif content.type == 'tool_use':
-                tool_name = content.name
-                tool_args = content.input
 
-                # Execute tool call
+        for content in response.candidates[0].content.parts:
+            if content.function_call:
+                tool_call = content.function_call
+                tool_name = tool_call.name
+                tool_args = tool_call.args
+                print(f"Calling tool: {tool_name} with args: {tool_args}")
+
                 result = await self.session.call_tool(tool_name, tool_args)
                 final_text.append(f"[Calling tool {tool_name} with args {tool_args}]")
-
                 assistant_message_content.append(content)
-                messages.append({
-                    "role": "assistant",
-                    "content": assistant_message_content
-                })
-                messages.append({
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "tool_result",
-                            "tool_use_id": content.id,
-                            "content": result.content
-                        }
-                    ]
-                })
-
-                # Get next response from Claude
-                response = self.llm_client.models.generate_content(
-                    model="gemini-1.5-pro",
-                    contents=messages,
-                    config=GenerateContentConfig(
-                        tools=available_tools
-                    )
-                )
-
-                final_text.append(response.content[0].text)
+                for content in result.content:
+                    print("result: ", content.text)
+            if content.text:
+                print(content.text)
 
         return "\n".join(final_text)
 
